@@ -28,9 +28,12 @@ class Decoder(nn.Module):
 
 class Encoder(nn.Module):
     
-    def __init__(self, vocab_size, embedding_size):
+    def __init__(self, vocab_size, embedding_size, num_blocks, num_heads, attn_dim_size):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_size)
+        self.blocks = []
+        for block in range(num_blocks):
+            self.blocks.append(Block(num_heads, attn_dim_size, embedding_size))
 
     def forward(self, x):
         pass
