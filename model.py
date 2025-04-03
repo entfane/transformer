@@ -35,6 +35,22 @@ class Encoder(nn.Module):
     def forward(self, x):
         pass
 
+class Block(nn.Module):
+
+    def __init__(self, num_heads, attn_dim_size, embedding_size):
+        super().__init__()
+        self.multi_head_attention = MultiHeadAttention(num_heads, attn_dim_size, embedding_size)
+        self.norm1 = nn.LayerNorm(embedding_size)
+        self.ff = nn.Linear(embedding_size, embedding_size)
+        self.norm2 = nn.LayerNorm(embedding_size)
+    
+    def forward(self, x):
+        output = self.multi_head_attention(x)
+        output = self.norm1(output)
+        output = self.ff(output)
+        output = self.norm2(output)
+        return output
+
 class MultiHeadAttention(nn.Module):
     
     def __init__(self, num_heads, attn_dim_size, embedding_size):
@@ -48,7 +64,6 @@ class MultiHeadAttention(nn.Module):
         output = self.heads[0](x)
         for idx in range(1, len(self.heads)):
             output = torch.cat((output, self.heads[idx](x)), dim = -1)
-        print(output.shape)
         output = self.proj(output)
         return output
         
