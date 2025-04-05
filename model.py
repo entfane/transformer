@@ -49,8 +49,11 @@ class Block(nn.Module):
     
     def forward(self, x):
         output = self.multi_head_attention(x)
+        output += x
         output = self.norm1(output)
+        resid = output
         output = self.ff(output)
+        output += resid
         output = self.norm2(output)
         return output
 
