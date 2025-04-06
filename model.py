@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+DFF = 2048
+
 class Transformer(nn.Module):
 
     def __init__(self):
@@ -54,7 +56,7 @@ class Block(nn.Module):
         super().__init__()
         self.multi_head_attention = MultiHeadAttention(num_heads, attn_dim_size, embedding_size)
         self.norm1 = nn.LayerNorm(embedding_size)
-        self.ff = nn.Linear(embedding_size, embedding_size)
+        self.ff = FeedForwardNet(embedding_size)
         self.norm2 = nn.LayerNorm(embedding_size)
     
     def forward(self, x):
@@ -66,14 +68,27 @@ class Block(nn.Module):
         output += resid
         output = self.norm2(output)
         return output
+    
+class FeedForwardNet(nn.Module):
+
+    def __init__(self, embedding_size):
+        super().__init__()
+        self.l1 = nn.Linear(embedding_size, DFF)
+        self.relu = nn.ReLU()
+        self.l2 = nn.Linear(DFF, embedding_size)
+    
+    def forward(self, x):
+        x = self.l1(x)
+        x = self.relu(x)
+        x = self.l2(x)
+        return x
+
 
 class MultiHeadAttention(nn.Module):
     
     def __init__(self, num_heads, attn_dim_size, embedding_size):
         super().__init__()
-        self.heads = []
-        for head in range(num_heads):
-            self.heads.append(AttentionHead(embedding_size, attn_dim_size, embedding_size // num_heads))
+        self.heads = nn.ModuleList([AttentionHead(embedding_size, attn_dim_size, embedding_size // num_heads) for _ in range(num_heads)])
         self.proj = nn.Linear(embedding_size, embedding_size)
     
     def forward(self, x):
