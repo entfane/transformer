@@ -28,15 +28,25 @@ class Decoder(nn.Module):
 
 class Encoder(nn.Module):
     
-    def __init__(self, vocab_size, embedding_size, num_blocks, num_heads, attn_dim_size):
+    def __init__(self, vocab_size, embedding_size, num_blocks, num_heads, attn_dim_size, seq_len):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_size)
+        self.positional_embedding = nn.Embedding(seq_len, embedding_size)
         self.blocks = []
         for block in range(num_blocks):
             self.blocks.append(Block(num_heads, attn_dim_size, embedding_size))
 
     def forward(self, x):
-        pass
+        x = self.embedding(x)
+        batch_size, sequence_len, embedding_size = x.shape
+        pos_enc = torch.arange(end=sequence_len)
+        extended_pos_enc = pos_enc.expand(batch_size, sequence_len)
+        extended_pos_enc = self.positional_embedding(extended_pos_enc)
+        x = x + extended_pos_enc
+        for block in self.blocks:
+            x = block(x)
+
+        return x
 
 class Block(nn.Module):
 
@@ -88,6 +98,6 @@ class AttentionHead(nn.Module):
         q = self.Q(x)
         k = self.K(x)
         v = self.V(x)
-        output = ((q @ k.T) / pow(self.attn_dim_size, -1/2)) @ v
+        output = ((q @ k.transpose(-2, -1)) / pow(self.attn_dim_size, -1/2)) @ v
         return output
         
