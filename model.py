@@ -93,11 +93,14 @@ class AttentionHead(nn.Module):
         self.Q = nn.Linear(embedding_size, attn_dim_size)
         self.K = nn.Linear(embedding_size, attn_dim_size)
         self.V = nn.Linear(embedding_size, output_dim_size)
+        self.softmax = nn.Softmax(dim=-1)
     
     def forward(self, x):
         q = self.Q(x)
         k = self.K(x)
         v = self.V(x)
-        output = ((q @ k.transpose(-2, -1)) / pow(self.attn_dim_size, -1/2)) @ v
+        output = (q @ k.transpose(-2, -1)) / pow(self.attn_dim_size, -1/2)
+        output = self.softmax(output)
+        output = output @ v
         return output
         
