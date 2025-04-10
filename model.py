@@ -110,11 +110,14 @@ class AttentionHead(nn.Module):
         self.V = nn.Linear(embedding_size, output_dim_size)
         self.softmax = nn.Softmax(dim=-1)
     
-    def forward(self, x):
+    def forward(self, x, mask = None):
         q = self.Q(x)
         k = self.K(x)
         v = self.V(x)
-        output = (q @ k.transpose(-2, -1)) / pow(self.attn_dim_size, -1/2)
+        output = (q @ k.transpose(-2, -1)) / (self.attn_dim_size ** 0.5)
+        if mask is not None:
+            output = output.masked_fill(mask == 0, float('-inf'))
+        print(output)
         output = self.softmax(output)
         output = output @ v
         return output
