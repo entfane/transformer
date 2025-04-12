@@ -2,80 +2,68 @@ import torch
 import torch.nn as nn
 
 DFF = 2048
-
-class Transformer(nn.Module):
-
-    def __init__(self):
-        super().__init__()
-        self.encoder = Encoder()
-        self.decoder = Decoder()
-
-    def forward(self, x):
-        pass
-        
-    def encode(self, x):
-        pass
-
-    def decode(self, x):
-        pass
-
+SEQ_LEN = 8
+EMBEDDING_SIZE = 32
+VOCAB_SIZE = 64
+NUM_BLOCKS = 8
+NUM_HEADS = 8
+ATTN_DIM_SIZE = EMBEDDING_SIZE // NUM_HEADS
 
 class Decoder(nn.Module):
 
     def __init__(self):
         super().__init__()
+        self.embedding = nn.Embedding(VOCAB_SIZE, EMBEDDING_SIZE)
+        self.pos_embedding = nn.Embedding(SEQ_LEN, EMBEDDING_SIZE)
+        self.blocks = nn.ModuleList([Block() for i in range(NUM_BLOCKS)])
+        self.l = nn.Linear(EMBEDDING_SIZE, VOCAB_SIZE)
+        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
-        pass
-
-class Encoder(nn.Module):
-    
-    def __init__(self, vocab_size, embedding_size, num_blocks, num_heads, attn_dim_size, seq_len):
-        super().__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_size)
-        self.positional_embedding = nn.Embedding(seq_len, embedding_size)
-        self.blocks = []
-        for block in range(num_blocks):
-            self.blocks.append(Block(num_heads, attn_dim_size, embedding_size))
-
-    def forward(self, x):
-        x = self.embedding(x)
-        batch_size, sequence_len, embedding_size = x.shape
-        pos_enc = torch.arange(end=sequence_len)
-        extended_pos_enc = pos_enc.expand(batch_size, sequence_len)
-        extended_pos_enc = self.positional_embedding(extended_pos_enc)
-        x = x + extended_pos_enc
+        input = self.embedding(x)
+        input_pos = self.pos_embedding(torch.arange(SEQ_LEN))
+        input += input_pos
         for block in self.blocks:
-            x = block(x)
+            input = block(input)
+        input = self.l(input)
+        input = self.softmax(input)
+        return input
 
-        return x
+class Block(nn.Module): 
 
-class Block(nn.Module):
-
-    def __init__(self, num_heads, attn_dim_size, embedding_size):
+    def __init__(self):
         super().__init__()
-        self.multi_head_attention = MultiHeadAttention(num_heads, attn_dim_size, embedding_size)
-        self.norm1 = nn.LayerNorm(embedding_size)
-        self.ff = FeedForwardNet(embedding_size)
-        self.norm2 = nn.LayerNorm(embedding_size)
+        self.masked_multi_head_attention = MultiHeadAttention()
+        self.norm1 = nn.LayerNorm(EMBEDDING_SIZE)
+        self.multi_head_attention = MultiHeadAttention()
+        self.norm2 = nn.LayerNorm(EMBEDDING_SIZE)
+        self.ff = FeedForwardNet()
+        self.norm3 = nn.LayerNorm(EMBEDDING_SIZE)
+        self.register_buffer('tril', torch.tril(torch.ones(SEQ_LEN, SEQ_LEN)))
     
     def forward(self, x):
-        output = self.multi_head_attention(x)
+        output = self.masked_multi_head_attention(x, self.tril)
         output += x
         output = self.norm1(output)
         resid = output
-        output = self.ff(output)
+
+        output = self.multi_head_attention(output)
         output += resid
         output = self.norm2(output)
+        resid = output
+
+        output = self.ff(output)
+        output += resid
+        output = self.norm3(output)
         return output
     
 class FeedForwardNet(nn.Module):
 
-    def __init__(self, embedding_size):
+    def __init__(self):
         super().__init__()
-        self.l1 = nn.Linear(embedding_size, DFF)
+        self.l1 = nn.Linear(EMBEDDING_SIZE, DFF)
         self.relu = nn.ReLU()
-        self.l2 = nn.Linear(DFF, embedding_size)
+        self.l2 = nn.Linear(DFF, EMBEDDING_SIZE)
     
     def forward(self, x):
         x = self.l1(x)
@@ -86,15 +74,15 @@ class FeedForwardNet(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     
-    def __init__(self, num_heads, attn_dim_size, embedding_size):
+    def __init__(self):
         super().__init__()
-        self.heads = nn.ModuleList([AttentionHead(embedding_size, attn_dim_size, embedding_size // num_heads) for _ in range(num_heads)])
-        self.proj = nn.Linear(embedding_size, embedding_size)
+        self.heads = nn.ModuleList([AttentionHead() for _ in range(NUM_HEADS)])
+        self.proj = nn.Linear(EMBEDDING_SIZE, EMBEDDING_SIZE)
     
-    def forward(self, x):
+    def forward(self, x, mask = None):
         output = self.heads[0](x)
         for idx in range(1, len(self.heads)):
-            output = torch.cat((output, self.heads[idx](x)), dim = -1)
+            output = torch.cat((output, self.heads[idx](x, mask)), dim = -1)
         output = self.proj(output)
         return output
         
@@ -102,22 +90,20 @@ class MultiHeadAttention(nn.Module):
 
 class AttentionHead(nn.Module):
     
-    def __init__(self, embedding_size, attn_dim_size, output_dim_size):
+    def __init__(self):
         super().__init__()
-        self.attn_dim_size = attn_dim_size
-        self.Q = nn.Linear(embedding_size, attn_dim_size)
-        self.K = nn.Linear(embedding_size, attn_dim_size)
-        self.V = nn.Linear(embedding_size, output_dim_size)
+        self.Q = nn.Linear(EMBEDDING_SIZE, ATTN_DIM_SIZE)
+        self.K = nn.Linear(EMBEDDING_SIZE, ATTN_DIM_SIZE)
+        self.V = nn.Linear(EMBEDDING_SIZE, ATTN_DIM_SIZE)
         self.softmax = nn.Softmax(dim=-1)
     
     def forward(self, x, mask = None):
         q = self.Q(x)
         k = self.K(x)
         v = self.V(x)
-        output = (q @ k.transpose(-2, -1)) / (self.attn_dim_size ** 0.5)
+        output = (q @ k.transpose(-2, -1)) / (ATTN_DIM_SIZE ** 0.5)
         if mask is not None:
             output = output.masked_fill(mask == 0, float('-inf'))
-        print(output)
         output = self.softmax(output)
         output = output @ v
         return output
