@@ -29,6 +29,13 @@ class Decoder(nn.Module):
         input = self.l(input)
         return input
     
+    def generate(self, x):
+        logits = self.forward(x)
+        last_token_logits = logits[:, -1, :]
+        outputs = self.softmax(last_token_logits)
+        output = torch.argmax(outputs, -1)
+        return output
+    
 
 class Block(nn.Module): 
 
