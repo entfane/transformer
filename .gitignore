@@ -172,3 +172,13 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# pickle files
+*.pkl
+
+# pytorch
+*.pth
+*.pt
+
+# txt
+*.txt
