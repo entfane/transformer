@@ -2,12 +2,13 @@ import torch
 import torch.nn as nn
 
 DFF = 2048
-SEQ_LEN = 8
+SEQ_LEN = 128
 EMBEDDING_SIZE = 32
-VOCAB_SIZE = 64
+VOCAB_SIZE = 65
 NUM_BLOCKS = 8
 NUM_HEADS = 8
 ATTN_DIM_SIZE = EMBEDDING_SIZE // NUM_HEADS
+DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class Decoder(nn.Module):
 
@@ -21,13 +22,13 @@ class Decoder(nn.Module):
 
     def forward(self, x):
         input = self.embedding(x)
-        input_pos = self.pos_embedding(torch.arange(SEQ_LEN))
+        input_pos = self.pos_embedding(torch.arange(SEQ_LEN).to(DEVICE))
         input += input_pos
         for block in self.blocks:
             input = block(input)
         input = self.l(input)
-        input = self.softmax(input)
         return input
+    
 
 class Block(nn.Module): 
 
