@@ -29,12 +29,16 @@ class Decoder(nn.Module):
         input = self.l(input)
         return input
     
-    def generate(self, x):
-        logits = self.forward(x)
-        last_token_logits = logits[:, -1, :]
-        outputs = self.softmax(last_token_logits)
-        output = torch.argmax(outputs, -1)
-        return output
+    def generate(self, x, max_new_tokens):
+        for i in range(max_new_tokens):
+            logits = self.forward(x)
+            last_token_logits = logits[:, -1, :]
+            outputs = self.softmax(last_token_logits)
+            output = torch.argmax(outputs, -1)
+            output.unsqueeze_(1)
+            x = torch.cat((x, output), dim=-1)
+            x = x[:, -SEQ_LEN:]
+        return x
     
 
 class Block(nn.Module): 
