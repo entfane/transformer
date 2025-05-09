@@ -2,43 +2,42 @@ import pickle
 import torch
 
 from model import SEQ_LEN, Decoder
+from transformers import HfArgumentParser
+from dataclasses import dataclass, field
+from tools import load_pickle_dict, load_txt
 
-LR = 4e-4
-EPOCHS = 1
-BATCH_SIZE = 2
-MAX_STEPS = None
+@dataclass
+class TrainingArguments:
+    lr: float = field(
+        default = 4e-4,
+        metadata = {"help": "Learning rate for model training"}
+    )
+    epoch: int = field(
+        default = 1,
+        metadata = {"help": "Number of epochs for model training"}
+    )
+    batch_size: int = field(
+        default = 1,
+        metadata = {"help": "Size of a batch during training"}
+    )
+    token_to_idx: str = field(
+        default = "token_to_idx.pkl",
+        metadata = {"help": "Path to token to index pickle vocabulary"}
+    )
+    corpus: str = field(
+        default = "corpus.txt",
+        metadata = {"help": "Path to corpus (should be .txt)"}
+    )
+    save_path: str = field(
+        default = "model.pt",
+        metadata = {"help": "Path where to save the model (should be either .pt or .pth)"}
+    )
 
 def get_idx(input, token_to_idx):
     output = []
     for char in input:
         output.append(token_to_idx[char])
     return output
-
-with open('token_to_idx.pkl', 'rb') as f:
-    token_to_idx = pickle.load(f)
-
-with open('idx_to_token.pkl', 'rb') as f:
-    idx_to_token = pickle.load(f)
-
-with open("tinyshakespeare.txt", "r", encoding="utf-8") as f:
-    lines = f.readlines()
-    single_line = ' '.join(lines)
-
-model = Decoder()
-
-
-
-if (torch.cuda.is_available()):
-    device = "cuda"
-    model.to("cuda")
-    print('Model loaded to cuda')
-else:
-    device = "cpu"
-    model.to("cpu")
-    print('Model loaded to cpu')
-
-optimizer = torch.optim.Adam(model.parameters(), lr = LR)
-loss_func = torch.nn.CrossEntropyLoss()
 
 def get_batch(input, SEQ_LEN, BATCH_SIZE):
     sequences = []
@@ -48,27 +47,38 @@ def get_batch(input, SEQ_LEN, BATCH_SIZE):
     return output
 
 
-for epoch in range(0, EPOCHS):
-    step = 0
-    for left in range(0, len(single_line) - SEQ_LEN, SEQ_LEN):
-        if (MAX_STEPS is not None) and (step >= MAX_STEPS):
-            break
-        substring = single_line[left:(left + SEQ_LEN + BATCH_SIZE - 1)]
-        idx = get_idx(substring, token_to_idx)
-        batch = get_batch(substring, SEQ_LEN, BATCH_SIZE).to(device)
-        output = model(batch) # B, T, V
-        # B, T
-        batch = batch.view(BATCH_SIZE * SEQ_LEN)
-        output = output.view(BATCH_SIZE * SEQ_LEN, - 1)
-        loss = loss_func(output, batch)
-        print(f"Loss at step {step}: {loss.item()}")
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        step += 1
+if __name__ == "__main__":
+    parser = HfArgumentParser(TrainingArguments)
+    args = parser.parse_args_into_dataclasses()[0]
+    token_to_idx = load_pickle_dict(args.token_to_idx)
+    corpus = load_txt(args.corpus)
 
-torch.save(model.state_dict(), "transformer.pt")
+    model = Decoder()
+    if (torch.cuda.is_available()):
+        device = "cuda"
+        model.to("cuda")
+        print('Model loaded to cuda')
+    else:
+        device = "cpu"
+        model.to("cpu")
+        print('Model loaded to cpu')
 
+    optimizer = torch.optim.Adam(model.parameters(), lr = args.lr)
+    loss_func = torch.nn.CrossEntropyLoss()
+    for epoch in range(0, args.epoch):
+        step = 0
+        for left in range(0, len(corpus) - SEQ_LEN, SEQ_LEN):
+            substring = corpus[left:(left + SEQ_LEN + args.batch_size - 1)]
+            idx = get_idx(substring, token_to_idx)
+            batch = get_batch(substring, SEQ_LEN, args.batch_size).to(device)
+            output = model(batch) 
+            batch = batch.view(args.batch_size * SEQ_LEN)
+            output = output.view(args.batch_size * SEQ_LEN, - 1)
+            loss = loss_func(output, batch)
+            print(f"Epoch {epoch} Step {step} Training Loss: {loss.item()}")
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            step += 1
 
-    
-        
+    torch.save(model.state_dict(), args.save_path)
