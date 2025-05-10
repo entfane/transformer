@@ -3,7 +3,7 @@ import pickle
 
 from model import SEQ_LEN, Decoder
 
-PATH = "transformer.pt"
+PATH = "model.pt"
 
 with open('idx_to_token.pkl', 'rb') as f:
     idx_to_token = pickle.load(f)
