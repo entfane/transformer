@@ -4,7 +4,7 @@ import torch
 from model import SEQ_LEN, Decoder
 from transformers import HfArgumentParser
 from dataclasses import dataclass, field
-from tools import load_pickle_dict, load_txt
+from tools import encode_corpus, load_pickle_dict, load_txt
 
 @dataclass
 class TrainingArguments:
@@ -12,9 +12,9 @@ class TrainingArguments:
         default = 4e-4,
         metadata = {"help": "Learning rate for model training"}
     )
-    epoch: int = field(
-        default = 1,
-        metadata = {"help": "Number of epochs for model training"}
+    iter: int = field(
+        default = 10,
+        metadata = {"help": "Number of iterations for model training"}
     )
     batch_size: int = field(
         default = 1,
@@ -39,12 +39,18 @@ def get_idx(input, token_to_idx):
         output.append(token_to_idx[char])
     return output
 
-def get_batch(input, SEQ_LEN, BATCH_SIZE):
+def get_batch(input, seq_len, batch_size):
     sequences = []
-    for batch in range(BATCH_SIZE):
-       sequences.append(torch.tensor(get_idx(input[batch:SEQ_LEN + batch], token_to_idx), dtype=torch.long))
+    for batch in range(batch_size):
+       sequences.append(torch.tensor(get_idx(input[batch:seq_len + batch], token_to_idx), dtype=torch.long))
     output = torch.stack(sequences)
     return output
+
+def get_random_batch(corpus, seq_len, batch_size):
+    rand_idx_in_corpus = torch.randint(high = len(corpus) - seq_len, size = (batch_size,))
+    x = torch.stack([corpus[idx: (idx + seq_len)] for idx in rand_idx_in_corpus])
+    y = torch.stack([corpus[idx + 1: (idx + seq_len + 1)] for idx in rand_idx_in_corpus])
+    return x, y
 
 
 if __name__ == "__main__":
@@ -52,6 +58,7 @@ if __name__ == "__main__":
     args = parser.parse_args_into_dataclasses()[0]
     token_to_idx = load_pickle_dict(args.token_to_idx)
     corpus = load_txt(args.corpus)
+    corpus = encode_corpus(corpus, token_to_idx).to("cuda")
 
     model = Decoder()
     if (torch.cuda.is_available()):
@@ -65,20 +72,15 @@ if __name__ == "__main__":
 
     optimizer = torch.optim.Adam(model.parameters(), lr = args.lr)
     loss_func = torch.nn.CrossEntropyLoss()
-    for epoch in range(0, args.epoch):
-        step = 0
-        for left in range(0, len(corpus) - SEQ_LEN, SEQ_LEN):
-            substring = corpus[left:(left + SEQ_LEN + args.batch_size - 1)]
-            idx = get_idx(substring, token_to_idx)
-            batch = get_batch(substring, SEQ_LEN, args.batch_size).to(device)
-            output = model(batch) 
-            batch = batch.view(args.batch_size * SEQ_LEN)
-            output = output.view(args.batch_size * SEQ_LEN, - 1)
-            loss = loss_func(output, batch)
-            print(f"Epoch {epoch} Step {step} Training Loss: {loss.item()}")
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            step += 1
+    for iter in range(args.iter):
+        x, y = get_random_batch(corpus, SEQ_LEN, args.batch_size)
+        output = model(x) 
+        y = y.view(args.batch_size * SEQ_LEN)
+        output = output.view(args.batch_size * SEQ_LEN, - 1)
+        loss = loss_func(output, y)
+        print(f"Iteration {iter} Training Loss: {loss.item()}")
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
     torch.save(model.state_dict(), args.save_path)
