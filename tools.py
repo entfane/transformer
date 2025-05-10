@@ -1,4 +1,5 @@
 import pickle
+import torch
 
 def load_pickle_dict(dictionary):
     with open(dictionary, 'rb') as f:
@@ -14,3 +15,7 @@ def load_txt(path, encoding = "utf-8"):
         lines = f.readlines()
         output = ' '.join(lines)
     return output
+
+def encode_corpus(corpus, token_to_idx):
+    encoded_corpus = torch.tensor([token_to_idx[token] for token in corpus], dtype = torch.long)
+    return encoded_corpus
