@@ -38,6 +38,10 @@ class TrainingArguments:
         metadata = {"help": "Device to train the model on. Either 'cpu' or 'cuda' if gpu is available. If not provided will choose automatically"
         "cuda if available"}
     )
+    validation: float = field(
+        default = 0.1,
+        metadata = {"help": "Percentage of data from corpus that will be used as validation dataset"}
+    )
 
 def get_idx(input, token_to_idx):
     output = []
