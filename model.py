@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import math
 
 DFF = 2048
 SEQ_LEN = 128
@@ -8,13 +9,14 @@ VOCAB_SIZE = 65
 NUM_BLOCKS = 8
 NUM_HEADS = 8
 ATTN_DIM_SIZE = EMBEDDING_SIZE // NUM_HEADS
+N = 10000
 
 class Decoder(nn.Module):
 
     def __init__(self):
         super().__init__()
         self.embedding = nn.Embedding(VOCAB_SIZE, EMBEDDING_SIZE)
-        self.pos_embedding = nn.Embedding(SEQ_LEN, EMBEDDING_SIZE)
+        self.register_buffer('pos_enc', self.__generate_pos_encoding())
         self.blocks = nn.ModuleList([Block() for i in range(NUM_BLOCKS)])
         self.l = nn.Linear(EMBEDDING_SIZE, VOCAB_SIZE)
         self.softmax = nn.Softmax(dim=-1)
@@ -22,8 +24,7 @@ class Decoder(nn.Module):
     def forward(self, x):
         input = self.embedding(x)
         model_device = next(self.parameters()).device
-        input_pos = self.pos_embedding(torch.arange(SEQ_LEN).to(model_device))
-        input += input_pos
+        input += self.pos_enc.to(model_device)
         for block in self.blocks:
             input = block(input)
         input = self.l(input)
@@ -39,6 +40,15 @@ class Decoder(nn.Module):
             x = torch.cat((x, output), dim=-1)
             x = x[:, -SEQ_LEN:]
         return x
+    
+    def __generate_pos_encoding(self):
+        pos_encoding = torch.zeros((SEQ_LEN, EMBEDDING_SIZE), dtype=torch.float, requires_grad=False)
+        for i in range(SEQ_LEN):
+            for k in range(EMBEDDING_SIZE // 2):
+                value = i / pow(N, (2 * k / EMBEDDING_SIZE))
+                pos_encoding[i, k * 2] = math.sin(value)
+                pos_encoding[i, k * 2 + 1] = math.cos(value)
+        return pos_encoding
     
 
 class Block(nn.Module): 
