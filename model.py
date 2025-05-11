@@ -54,21 +54,23 @@ class Block(nn.Module):
         self.register_buffer('tril', torch.tril(torch.ones(SEQ_LEN, SEQ_LEN)))
     
     def forward(self, x):
-        output = self.masked_multi_head_attention(x, self.tril)
-        output += x
-        output = self.norm1(output)
-        resid = output
 
-        output = self.multi_head_attention(output)
-        output += resid
+        output = self.norm1(x)
+        output = self.masked_multi_head_attention(output, mask = self.tril)
+        output = x + output
+
+        x = output
         output = self.norm2(output)
-        resid = output
+        output = self.multi_head_attention(output)
+        output = x + output
 
-        output = self.ff(output)
-        output += resid
+        x = output
         output = self.norm3(output)
+        output = self.ff(output)
+        output = x + output
+        
         return output
-    
+
 class FeedForwardNet(nn.Module):
 
     def __init__(self):
