@@ -4,7 +4,8 @@ import torch
 from model import SEQ_LEN, Decoder
 from transformers import HfArgumentParser
 from dataclasses import dataclass, field
-from tools import encode_corpus, load_pickle_dict, load_txt
+from tools import encode_corpus, get_device, load_pickle_dict, load_txt
+from constants import DEFAULT_DEVICE
 
 @dataclass
 class TrainingArguments:
@@ -32,6 +33,11 @@ class TrainingArguments:
         default = "model.pt",
         metadata = {"help": "Path where to save the model (should be either .pt or .pth)"}
     )
+    device: str = field(
+        default = DEFAULT_DEVICE,
+        metadata = {"help": "Device to train the model on. Either 'cpu' or 'cuda' if gpu is available. If not provided will choose automatically"
+        "cuda if available"}
+    )
 
 def get_idx(input, token_to_idx):
     output = []
@@ -58,18 +64,10 @@ if __name__ == "__main__":
     args = parser.parse_args_into_dataclasses()[0]
     token_to_idx = load_pickle_dict(args.token_to_idx)
     corpus = load_txt(args.corpus)
-    corpus = encode_corpus(corpus, token_to_idx).to("cuda")
-
-    model = Decoder()
-    if (torch.cuda.is_available()):
-        device = "cuda"
-        model.to("cuda")
-        print('Model loaded to cuda')
-    else:
-        device = "cpu"
-        model.to("cpu")
-        print('Model loaded to cpu')
-
+    device = get_device(args.device)
+    model = Decoder().to(device)
+    print(f"Model loaded to {device}")
+    corpus = encode_corpus(corpus, token_to_idx).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr = args.lr)
     loss_func = torch.nn.CrossEntropyLoss()
     for iter in range(args.iter):
