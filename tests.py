@@ -2,6 +2,9 @@ from model import EMBEDDING_SIZE, VOCAB_SIZE, AttentionHead, Block, Decoder, Fee
 import torch
 import torch.nn.functional as F
 
+from tools import encode_corpus
+from train import get_random_batch
+
 SEQ_LEN = 8
 BATCH_SIZE = 2
 
@@ -45,4 +48,11 @@ def decoder_test():
     output = decoder(input)
     print(output[0][-1])
 
-decoder_test()
+def get_random_batch_test():
+    get_random_batch(torch.Tensor([1,2,3,4,5,6,7,8]), 3, 2)
+
+def encode_corpus_test():
+    token_to_idx = {'a': 1, 'b': 2, 'c': 3}
+    print(encode_corpus("aaabbcc", token_to_idx))
+
+encode_corpus_test()
