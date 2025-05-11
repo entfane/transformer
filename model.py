@@ -8,7 +8,6 @@ VOCAB_SIZE = 65
 NUM_BLOCKS = 8
 NUM_HEADS = 8
 ATTN_DIM_SIZE = EMBEDDING_SIZE // NUM_HEADS
-DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class Decoder(nn.Module):
 
@@ -22,7 +21,8 @@ class Decoder(nn.Module):
 
     def forward(self, x):
         input = self.embedding(x)
-        input_pos = self.pos_embedding(torch.arange(SEQ_LEN).to(DEVICE))
+        model_device = next(self.parameters()).device
+        input_pos = self.pos_embedding(torch.arange(SEQ_LEN).to(model_device))
         input += input_pos
         for block in self.blocks:
             input = block(input)
