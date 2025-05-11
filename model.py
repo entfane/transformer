@@ -35,8 +35,7 @@ class Decoder(nn.Module):
             logits = self.forward(x)
             last_token_logits = logits[:, -1, :]
             outputs = self.softmax(last_token_logits)
-            output = torch.argmax(outputs, -1)
-            output.unsqueeze_(1)
+            output = torch.multinomial(outputs, num_samples = 1)
             x = torch.cat((x, output), dim=-1)
             x = x[:, -SEQ_LEN:]
         return x
