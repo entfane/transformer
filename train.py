@@ -42,6 +42,14 @@ class TrainingArguments:
         default = 0.1,
         metadata = {"help": "Percentage of data from corpus that will be used as validation dataset"}
     )
+    validation_iter: int = field(
+        default = 10,
+        metadata = {"help": "Number of validation iterations"}
+    )
+    validation_interval: int = field(
+        default = 10,
+        metadata = {"help": "Number of training iterations interval between validations"}
+    )
 
 def get_idx(input, token_to_idx):
     output = []
@@ -68,21 +76,38 @@ if __name__ == "__main__":
     args = parser.parse_args_into_dataclasses()[0]
     token_to_idx = load_pickle_dict(args.token_to_idx)
     corpus = load_txt(args.corpus)
+    split_idx = int(len(corpus) * (1 - args.validation))
+    train_corpus = corpus[: split_idx]
+    val_corpus = corpus[split_idx :]
     device = get_device(args.device)
     model = Decoder().to(device)
     print(f"Model loaded to {device}")
-    corpus = encode_corpus(corpus, token_to_idx).to(device)
+    train_corpus = encode_corpus(train_corpus, token_to_idx).to(device)
+    val_corpus = encode_corpus(val_corpus, token_to_idx).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr = args.lr)
     loss_func = torch.nn.CrossEntropyLoss()
     for iter in range(args.iter):
-        x, y = get_random_batch(corpus, SEQ_LEN, args.batch_size)
+        x, y = get_random_batch(train_corpus, SEQ_LEN, args.batch_size)
         output = model(x) 
         y = y.view(args.batch_size * SEQ_LEN)
         output = output.view(args.batch_size * SEQ_LEN, - 1)
         loss = loss_func(output, y)
-        print(f"Iteration {iter} Training Loss: {loss.item()}")
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        if (iter + 1) % args.validation_interval == 0:
+            with torch.no_grad():
+                evals = torch.zeros(args.validation_iter)
+                for eval_iter in range(args.validation_iter):
+                    x, y = get_random_batch(val_corpus, SEQ_LEN, args.batch_size)
+                    eval_output = model(x)
+                    y = y.view(args.batch_size * SEQ_LEN)
+                    eval_output = eval_output.view(args.batch_size * SEQ_LEN, -1)
+                    evals[eval_iter] = loss_func(output, y)
+                eval_loss = evals.mean()
+                print(f"Iteration {iter} Training Loss: {loss.item()} Evaluation Loss: {eval_loss.item()}")
+        else:
+            print(f"Iteration {iter} Training Loss: {loss.item()}")
+
 
     torch.save(model.state_dict(), args.save_path)
