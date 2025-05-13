@@ -1,13 +1,14 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 
-DFF = 2048
-SEQ_LEN = 128
-EMBEDDING_SIZE = 128
+DFF = 1536
+SEQ_LEN = 256
+EMBEDDING_SIZE = 384
 VOCAB_SIZE = 65
-NUM_BLOCKS = 8
-NUM_HEADS = 8
+NUM_BLOCKS = 6
+NUM_HEADS = 6
 ATTN_DIM_SIZE = EMBEDDING_SIZE // NUM_HEADS
 N = 10000
 
@@ -19,7 +20,6 @@ class Decoder(nn.Module):
         self.register_buffer('pos_enc', self.__generate_pos_encoding())
         self.blocks = nn.ModuleList([Block() for i in range(NUM_BLOCKS)])
         self.l = nn.Linear(EMBEDDING_SIZE, VOCAB_SIZE)
-        self.softmax = nn.Softmax(dim=-1)
 
     def forward(self, x):
         input = self.embedding(x)
@@ -34,7 +34,7 @@ class Decoder(nn.Module):
         for i in range(max_new_tokens):
             logits = self.forward(x)
             last_token_logits = logits[:, -1, :]
-            outputs = self.softmax(last_token_logits)
+            outputs = F.softmax(last_token_logits, dim = -1)
             output = torch.multinomial(outputs, num_samples = 1)
             x = torch.cat((x, output), dim=-1)
             x = x[:, -SEQ_LEN:]
