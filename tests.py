@@ -54,5 +54,3 @@ def get_random_batch_test():
 def encode_corpus_test():
     token_to_idx = {'a': 1, 'b': 2, 'c': 3}
     print(encode_corpus("aaabbcc", token_to_idx))
-
-encode_corpus_test()
