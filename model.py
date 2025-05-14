@@ -11,6 +11,7 @@ NUM_BLOCKS = 6
 NUM_HEADS = 6
 ATTN_DIM_SIZE = EMBEDDING_SIZE // NUM_HEADS
 N = 10000
+DROPOUT = 0.2
 
 class Decoder(nn.Module):
 
@@ -32,12 +33,12 @@ class Decoder(nn.Module):
     
     def generate(self, x, max_new_tokens):
         for i in range(max_new_tokens):
+            x = x[:, -SEQ_LEN : ]
             logits = self.forward(x)
             last_token_logits = logits[:, -1, :]
             outputs = F.softmax(last_token_logits, dim = -1)
             output = torch.multinomial(outputs, num_samples = 1)
             x = torch.cat((x, output), dim=-1)
-            x = x[:, -SEQ_LEN:]
         return x
     
     def __generate_pos_encoding(self):
@@ -56,10 +57,8 @@ class Block(nn.Module):
         super().__init__()
         self.masked_multi_head_attention = MultiHeadAttention()
         self.norm1 = nn.LayerNorm(EMBEDDING_SIZE)
-        self.multi_head_attention = MultiHeadAttention()
-        self.norm2 = nn.LayerNorm(EMBEDDING_SIZE)
         self.ff = FeedForwardNet()
-        self.norm3 = nn.LayerNorm(EMBEDDING_SIZE)
+        self.norm2 = nn.LayerNorm(EMBEDDING_SIZE)
         self.register_buffer('tril', torch.tril(torch.ones(SEQ_LEN, SEQ_LEN)))
     
     def forward(self, x):
@@ -70,11 +69,6 @@ class Block(nn.Module):
 
         x = output
         output = self.norm2(output)
-        output = self.multi_head_attention(output)
-        output = x + output
-
-        x = output
-        output = self.norm3(output)
         output = self.ff(output)
         output = x + output
         
@@ -87,11 +81,13 @@ class FeedForwardNet(nn.Module):
         self.l1 = nn.Linear(EMBEDDING_SIZE, DFF)
         self.relu = nn.ReLU()
         self.l2 = nn.Linear(DFF, EMBEDDING_SIZE)
+        self.dropout = nn.Dropout(DROPOUT)
     
     def forward(self, x):
         x = self.l1(x)
         x = self.relu(x)
         x = self.l2(x)
+        x = self.dropout(x)
         return x
 
 
@@ -101,12 +97,12 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         self.heads = nn.ModuleList([AttentionHead() for _ in range(NUM_HEADS)])
         self.proj = nn.Linear(EMBEDDING_SIZE, EMBEDDING_SIZE)
+        self.dropout = nn.Dropout(DROPOUT)
     
     def forward(self, x, mask = None):
-        output = self.heads[0](x)
-        for idx in range(1, len(self.heads)):
-            output = torch.cat((output, self.heads[idx](x, mask)), dim = -1)
+        output = torch.cat([head(x, mask) for head in self.heads], dim = -1)
         output = self.proj(output)
+        output = self.dropout(output)
         return output
         
         
@@ -118,16 +114,18 @@ class AttentionHead(nn.Module):
         self.Q = nn.Linear(EMBEDDING_SIZE, ATTN_DIM_SIZE)
         self.K = nn.Linear(EMBEDDING_SIZE, ATTN_DIM_SIZE)
         self.V = nn.Linear(EMBEDDING_SIZE, ATTN_DIM_SIZE)
-        self.softmax = nn.Softmax(dim=-1)
+        self.dropout = nn.Dropout(DROPOUT)
     
     def forward(self, x, mask = None):
+        B, T, C = x.shape
         q = self.Q(x)
         k = self.K(x)
         v = self.V(x)
-        output = (q @ k.transpose(-2, -1)) / (ATTN_DIM_SIZE ** 0.5)
+        output = (q @ k.transpose(-2, -1)) * ATTN_DIM_SIZE ** -0.5
         if mask is not None:
-            output = output.masked_fill(mask == 0, float('-inf'))
-        output = self.softmax(output)
+            output = output.masked_fill(mask[:T, :T] == 0, float('-inf'))
+        output = F.softmax(output, dim = -1)
+        output = self.dropout(output)
         output = output @ v
         return output
         
