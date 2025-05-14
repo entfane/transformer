@@ -84,7 +84,8 @@ if __name__ == "__main__":
     print(f"Model loaded to {device}")
     train_corpus = encode_corpus(train_corpus, token_to_idx).to(device)
     val_corpus = encode_corpus(val_corpus, token_to_idx).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr = args.lr)
+    print("Total number of parameters: ", sum(p.numel() for p in model.parameters())/1e6, 'M parameters')
+    optimizer = torch.optim.AdamW(model.parameters(), lr = args.lr)
     loss_func = torch.nn.CrossEntropyLoss()
     for iter in range(args.iter):
         x, y = get_random_batch(train_corpus, SEQ_LEN, args.batch_size)
@@ -97,15 +98,17 @@ if __name__ == "__main__":
         optimizer.step()
         if (iter + 1) % args.validation_interval == 0:
             with torch.no_grad():
+                model.eval()
                 evals = torch.zeros(args.validation_iter)
                 for eval_iter in range(args.validation_iter):
                     x, y = get_random_batch(val_corpus, SEQ_LEN, args.batch_size)
                     eval_output = model(x)
                     y = y.view(args.batch_size * SEQ_LEN)
                     eval_output = eval_output.view(args.batch_size * SEQ_LEN, -1)
-                    evals[eval_iter] = loss_func(output, y)
+                    evals[eval_iter] = loss_func(eval_output, y)
                 eval_loss = evals.mean()
                 print(f"Iteration {iter} Training Loss: {loss.item()} Evaluation Loss: {eval_loss.item()}")
+                model.train()
         else:
             print(f"Iteration {iter} Training Loss: {loss.item()}")
 
