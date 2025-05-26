@@ -32,7 +32,7 @@ With ~10 million parameters, it's lightweight enough for experimentation while b
 1. Clone the repository:
 ```bash
 git clone https://github.com/entfane/transformer.git
-cd transformer-decoder
+cd transformer
 ```
 
 2. Install dependencies:
